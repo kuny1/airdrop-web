@@ -1,0 +1,25 @@
+{
+  "name": "airdrop-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "局域网收件台：手机浏览器扫码传文件到 PC，PC 网格预览、一键落盘。零依赖。",
+  "bin": {
+    "airdrop": "./bin/airdrop.mjs"
+  },
+  "exports": {
+    ".": "./src/index.mjs",
+    "./server": "./src/server.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "start": "node bin/airdrop.mjs"
+  }
+}

@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>局域网收件台</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2312141a'/%3E%3Cg fill='none' stroke='%23ffb84d' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 22V9m0 0-5 5m5-5 5 5'/%3E%3Cpath d='M9 21v2.5A1.5 1.5 0 0 0 10.5 25h11a1.5 1.5 0 0 0 1.5-1.5V21'/%3E%3C/g%3E%3C/svg%3E">
+<script src="/vendor/qrcode.js"></script>
+<style>
+:root{
+  --ink:#12141a; --surface:#1a1d26; --surface-2:#222633; --surface-3:#2b3040;
+  --line:#2b3040; --line-soft:#232733;
+  --text:#e8eaf0; --dim:#9aa0b4; --faint:#6b7284;
+  --accent:#ffb84d; --accent-ink:#1c1400; --accent-soft:#3a2c10;
+  --ok:#5fd39a; --danger:#ff7a6b;
+  --r:10px;
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--ink); color:var(--text);
+  font:400 14px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit;background:none;border:none;padding:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:6px}
+
+/* ── 连接台 ───────────────────────────── */
+.rail{
+  position:sticky; top:0; z-index:30;
+  display:flex; align-items:center; gap:var(--s5);
+  padding:var(--s3) var(--s5);
+  background:rgba(18,20,26,.86); backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line-soft);
+}
+.host{display:flex;align-items:center;gap:var(--s2);min-width:0}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none;
+     box-shadow:0 0 0 0 rgba(95,211,154,.55); animation:pulse 2.6s ease-out infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(95,211,154,.45)}70%,100%{box-shadow:0 0 0 7px rgba(95,211,154,0)}}
+.host b{font-weight:600;font-size:14px}
+.host span{color:var(--dim);font-size:13px}
+.addr{
+  margin-left:auto; display:flex; align-items:center; gap:var(--s3);
+}
+.addr code{
+  font:600 17px/1 ui-monospace,SFMono-Regular,Menlo,monospace;
+  letter-spacing:.2px; color:var(--accent);
+  background:var(--accent-soft); padding:7px 11px; border-radius:8px;
+}
+.copy{color:var(--dim);font-size:12.5px;padding:6px 8px;border-radius:6px}
+.copy:hover{color:var(--text);background:var(--surface-2)}
+/* padding 就是二维码的静区：svgDrawer 不吐 margin，码会一直画到 svg 边缘，
+   而静区太薄是屏幕二维码扫不出来的头号原因。下面三个值都按各自容器尺寸取到约 3 个模块宽。
+   不能用百分比 —— CSS 里 padding 的百分比是按**包含块的宽度**算的，不是元素自己的宽度，
+   写 10% 会让 rail 里这个 44px 的容器被外层宽度吹爆。 */
+.qr-mini{width:44px;height:44px;border-radius:8px;background:#fff;padding:4px;flex:none;
+         border:1px solid var(--line);cursor:zoom-in}
+.qr-mini svg{display:block;width:100%;height:100%}
+.density{display:flex;background:var(--surface-2);border-radius:8px;padding:3px;gap:2px}
+.density button{padding:5px 11px;border-radius:6px;font-size:12.5px;color:var(--dim);white-space:nowrap}
+.density button[aria-pressed=true]{background:var(--surface-3);color:var(--text);font-weight:500}
+.density button:hover{color:var(--text)}
+
+/* ── 网格 ─────────────────────────────── */
+main{padding:var(--s5) var(--s5) 120px}
+.group{margin-bottom:var(--s6)}
+.group > h2{
+  margin:0 0 var(--s3); font-size:15px; font-weight:600; letter-spacing:.1px;
+  display:flex; align-items:baseline; gap:var(--s2);
+}
+.group > h2 i{font-style:normal;color:var(--faint);font-size:13px;font-weight:400}
+.grid{display:grid; gap:var(--s3); grid-template-columns:repeat(auto-fill,minmax(var(--cell),1fr))}
+body[data-density=roomy]{--cell:250px}
+body[data-density=normal]{--cell:170px}
+body[data-density=tight]{--cell:112px}
+
+.card{
+  position:relative; aspect-ratio:1; border-radius:var(--r); overflow:hidden;
+  background:var(--surface-2); border:1px solid var(--line-soft);
+  display:block; width:100%; text-align:left; cursor:pointer;
+  transition:transform .16s cubic-bezier(.2,.7,.3,1), border-color .16s;
+}
+.card:hover{transform:translateY(-2px);border-color:var(--surface-3)}
+.card.new{animation:pop .34s cubic-bezier(.2,.9,.3,1)}
+@keyframes pop{from{transform:scale(.9);opacity:0}to{transform:none;opacity:1}}
+.card img{width:100%;height:100%;object-fit:cover;display:block;background:#0d0f14}
+.card video{width:100%;height:100%;object-fit:cover;display:block;background:transparent}
+.card video.over{position:absolute;inset:0}
+.play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:34px;height:34px;border-radius:50%;background:rgba(10,12,16,.5);
+  backdrop-filter:blur(3px);border:1px solid rgba(255,255,255,.28);
+  display:grid;place-content:center;pointer-events:none}
+.play svg{width:14px;height:14px;fill:#fff;margin-left:1px}
+.card .glyph{
+  position:absolute;inset:0;display:grid;place-content:center;gap:2px;text-align:center;
+}
+.card .glyph em{
+  font:700 clamp(15px,17cqw,30px)/1 ui-monospace,Menlo,monospace;
+  font-style:normal; letter-spacing:.5px; color:var(--g-fg);
+}
+.card .glyph small{font-size:11px;color:var(--dim)}
+.card{container-type:inline-size}
+.cap{
+  position:absolute;left:0;right:0;bottom:0;padding:22px var(--s2) var(--s2);
+  background:linear-gradient(to top,rgba(8,9,13,.92) 20%,rgba(8,9,13,.55) 60%,transparent);
+  pointer-events:none;
+}
+.cap b{display:block;font-size:12.5px;font-weight:500;color:#fff;
+       overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cap span{font-size:11.5px;color:#b9bece}
+body[data-density=tight] .cap b{font-size:11.5px}
+body[data-density=tight] .cap span{display:none}
+
+.check{
+  position:absolute;top:var(--s2);left:var(--s2);width:22px;height:22px;border-radius:50%;
+  border:1.5px solid rgba(255,255,255,.85); background:rgba(10,12,16,.45);
+  backdrop-filter:blur(4px); display:grid;place-content:center;
+  opacity:0; transition:opacity .12s, background .12s, border-color .12s; cursor:pointer;
+}
+.card:hover .check,.card:focus-visible .check,body.selecting .check{opacity:1}
+.card[aria-selected=true] .check{opacity:1;background:var(--accent);border-color:var(--accent)}
+.check svg{width:12px;height:12px;opacity:0}
+.card[aria-selected=true] .check svg{opacity:1}
+.card[aria-selected=true]{border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent)}
+.saved{
+  position:absolute;top:var(--s2);right:var(--s2);
+  display:flex;align-items:center;gap:3px;font-size:11px;color:var(--ok);
+  background:rgba(8,10,14,.6);backdrop-filter:blur(4px);padding:3px 6px;border-radius:20px;
+}
+
+/* 传输中 */
+.card.incoming{cursor:default;border-color:var(--accent-soft)}
+.card.incoming .glyph em{color:var(--accent)}
+.bar{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.12)}
+.bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .2s linear}
+
+/* ── 空态 ─────────────────────────────── */
+.empty{
+  display:flex;align-items:center;gap:var(--s6);
+  max-width:760px;margin:8vh auto 0;padding:var(--s6);
+  background:var(--surface);border:1px solid var(--line);border-radius:18px;
+}
+.empty .qr-big{width:190px;height:190px;background:#fff;border-radius:12px;padding:16px;flex:none}
+.empty .qr-big svg{display:block;width:100%;height:100%}
+.empty h1{margin:0 0 var(--s2);font-size:21px;font-weight:600;letter-spacing:.1px}
+.empty p{margin:0 0 var(--s3);color:var(--dim);font-size:14px;max-width:34em}
+.empty code{font:600 16px/1 ui-monospace,Menlo,monospace;color:var(--accent);
+            background:var(--accent-soft);padding:6px 10px;border-radius:7px;display:inline-block}
+.empty .hint{margin-top:var(--s4);font-size:12.5px;color:var(--faint)}
+
+/* ── 选择操作条 ───────────────────────── */
+.actionbar{
+  position:fixed;left:50%;bottom:24px;transform:translate(-50%,calc(100% + 40px));
+  display:flex;align-items:center;gap:var(--s3);
+  background:var(--surface-2);border:1px solid var(--surface-3);
+  padding:var(--s2) var(--s2) var(--s2) var(--s4);border-radius:14px;
+  box-shadow:0 16px 40px rgba(0,0,0,.5);
+  transition:transform .22s cubic-bezier(.2,.8,.3,1);z-index:40;
+}
+body.selecting .actionbar{transform:translate(-50%,0)}
+.actionbar .n{font-size:13.5px;color:var(--dim);white-space:nowrap}
+.actionbar .n b{color:var(--text);font-weight:600}
+.btn{padding:8px 14px;border-radius:9px;font-size:13.5px;font-weight:500;
+     background:var(--surface-3);color:var(--text);white-space:nowrap}
+.btn:hover{background:#343a4c}
+.btn.primary{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn.primary:hover{background:#ffc76e}
+.btn.ghost{background:none;color:var(--dim)}
+.btn.ghost:hover{background:var(--surface-3);color:var(--text)}
+.btn.danger:hover{background:#3a2020;color:var(--danger)}
+.btn[disabled]{opacity:.4;cursor:not-allowed}
+
+/* ── 预览层 ───────────────────────────── */
+.lb{position:fixed;inset:0;z-index:60;background:rgba(8,9,13,.965);backdrop-filter:blur(10px);
+    display:none;flex-direction:column}
+.lb[open]{display:flex}
+.lb header{display:flex;align-items:center;gap:var(--s3);padding:var(--s3) var(--s4);
+           background:var(--ink);border-bottom:1px solid var(--line-soft)}
+.lb header .meta{min-width:0}
+.lb header b{display:block;font-size:14.5px;font-weight:600;
+             overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb header span{font-size:12.5px;color:var(--dim)}
+.lb header .acts{margin-left:auto;display:flex;gap:var(--s2)}
+/* flex（而不是 grid）才能让子元素的 max-height:100% 对着确定高度解析 */
+.lb .stage{flex:1;display:flex;align-items:center;justify-content:center;
+  padding:var(--s5);min-height:0;overflow:hidden;position:relative}
+.lb .stage > *{min-width:0;min-height:0}
+.lb .stage img,.lb .stage video{
+  max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;border-radius:8px}
+.lb .stage iframe{width:100%;height:100%;border:0;border-radius:8px;background:#fff}
+.lb .stage pre{
+  width:100%;max-width:68ch;max-height:100%;height:auto;overflow:auto;margin:0;align-self:center;
+  background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:var(--s4);
+  font:13.5px/1.65 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-word;color:var(--text);
+}
+.lb .none{text-align:center;color:var(--dim)}
+.lb .none em{display:block;font-style:normal;font:700 44px/1 ui-monospace,Menlo,monospace;
+             color:var(--surface-3);margin-bottom:var(--s3)}
+.nav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:64px;border-radius:10px;
+     background:rgba(30,34,44,.7);color:var(--text);font-size:20px;display:grid;place-content:center}
+.nav:hover{background:var(--surface-3)}
+.nav.prev{left:10px} .nav.next{right:10px}
+
+/* ── toast ────────────────────────────── */
+.toast{
+  position:fixed;left:50%;bottom:24px;transform:translate(-50%,calc(100% + 40px));
+  display:flex;align-items:center;gap:var(--s3);z-index:70;
+  background:var(--surface-2);border:1px solid var(--surface-3);
+  padding:var(--s3) var(--s3) var(--s3) var(--s4);border-radius:12px;
+  box-shadow:0 16px 40px rgba(0,0,0,.5);transition:transform .22s cubic-bezier(.2,.8,.3,1);
+}
+.toast[open]{transform:translate(-50%,0)}
+.toast .txt{font-size:13.5px}
+.toast .txt small{display:block;color:var(--dim);font-size:12px;
+  font-family:ui-monospace,Menlo,monospace;margin-top:2px}
+</style>
+</head>
+<body data-density="normal">
+
+<div class="rail">
+  <div class="host"><span class="dot" aria-hidden="true"></span>
+    <b id="hostname">…</b><span>接收中</span></div>
+  <div class="addr">
+    <code id="addr">…</code>
+    <button class="copy" id="copy">复制地址</button>
+    <div class="qr-mini" id="qrMini" title="点击放大二维码" role="button" tabindex="0" aria-label="放大二维码"></div>
+    <div class="density" role="group" aria-label="缩略图密度">
+      <button data-d="roomy">舒展</button>
+      <button data-d="normal" aria-pressed="true">标准</button>
+      <button data-d="tight">紧凑</button>
+    </div>
+  </div>
+</div>
+
+<main id="main"></main>
+
+<div class="actionbar" id="actionbar">
+  <span class="n">已选 <b id="selN">0</b> 项</span>
+  <button class="btn primary" id="aSave">保存到电脑</button>
+  <button class="btn" id="aDownload">用浏览器下载</button>
+  <button class="btn danger" id="aDelete">删除</button>
+  <button class="btn ghost" id="aCancel">取消选择</button>
+</div>
+
+<div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="文件预览">
+  <header>
+    <div class="meta"><b id="lbName"></b><span id="lbMeta"></span></div>
+    <div class="acts">
+      <button class="btn primary" id="lbSave">保存到电脑</button>
+      <button class="btn" id="lbDownload">下载</button>
+      <button class="btn danger" id="lbDelete">删除</button>
+      <button class="btn ghost" id="lbClose">关闭 (Esc)</button>
+    </div>
+  </header>
+  <div class="stage" id="lbStage"></div>
+</div>
+
+<div class="toast" id="toast">
+  <div class="txt"><span id="toastMsg"></span><small id="toastPath"></small></div>
+  <button class="btn" id="toastAction">在访达中显示</button>
+</div>
+
+<script>
+if(/iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent)) location.replace('/m')
+const $ = s => document.querySelector(s)
+let INFO = { ip:'', port:'', host:'', saveDir:'' }
+let files = []
+const incoming = new Map()
+const selected = new Set()
+let lbIndex = -1
+
+const fmtSize = b => b < 1024 ? b+' B'
+  : b < 1048576 ? (b/1024).toFixed(0)+' KB'
+  : b < 1073741824 ? (b/1048576).toFixed(1)+' MB' : (b/1073741824).toFixed(2)+' GB'
+const fmtTime = t => new Date(t).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})
+const ext = n => (n.split('.').pop()||'?').toUpperCase().slice(0,4)
+const HUE = { pdf:'#ff8f7a', text:'#8fd3ff', audio:'#c9a4ff', file:'#9aa0b4', video:'#7ee3c0' }
+
+function dayBucket(t){
+  const d=new Date(t), n=new Date()
+  const same=(a,b)=>a.toDateString()===b.toDateString()
+  if(same(d,n)) return '今天'
+  const y=new Date(n); y.setDate(y.getDate()-1)
+  if(same(d,y)) return '昨天'
+  return d.toLocaleDateString('zh-CN',{month:'long',day:'numeric'})
+}
+
+function cardHTML(f){
+  const sel = selected.has(f.id)
+  let media
+  if(f.kind==='image') media = `<img src="/thumb/${f.id}" alt="" loading="lazy">`
+  else if(f.kind==='video') media =
+      `<div class="glyph" style="--g-fg:${HUE.video}"><em>${ext(f.name)}</em><small>视频</small></div>
+       <video class="over" src="/file/${f.id}#t=0.4" preload="metadata" muted playsinline></video>
+       <span class="play" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M5.5 3.6 12 8l-6.5 4.4z"/></svg></span>`
+  else media = `<div class="glyph" style="--g-fg:${HUE[f.kind]||HUE.file}">
+      <em>${ext(f.name)}</em><small>${f.kind==='text'?'文本':f.kind==='audio'?'音频':f.kind==='pdf'?'文档':'文件'}</small></div>`
+  return `<button class="card" role="option" aria-selected="${sel}" data-id="${f.id}" tabindex="0">
+    ${media}
+    <span class="check" data-check="${f.id}"><svg viewBox="0 0 12 12" fill="none" stroke="#1c1400" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6.3 4.6 9 10 3.2"/></svg></span>
+    ${f.saved?`<span class="saved"><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6.3 4.6 9 10 3.2"/></svg>已存</span>`:''}
+    <span class="cap"><b>${escapeHTML(f.name)}</b><span>${fmtSize(f.size)} · ${fmtTime(f.at)}</span></span>
+  </button>`
+}
+function incomingHTML(x){
+  const pct = x.size ? Math.round(x.received/x.size*100) : 0
+  return `<div class="card incoming" data-inc="${x.id}">
+    <div class="glyph" style="--g-fg:var(--accent)"><em>${ext(x.name)}</em><small>正在接收 ${pct}%</small></div>
+    <span class="cap"><b>${escapeHTML(x.name)}</b><span>${fmtSize(x.received)} / ${x.size?fmtSize(x.size):'…'}</span></span>
+    <span class="bar"><i style="width:${pct}%"></i></span></div>`
+}
+const escapeHTML = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))
+
+function render(newIds){
+  const main = $('#main')
+  if(!files.length && !incoming.size){
+    main.innerHTML = `<div class="empty">
+      <div class="qr-big" id="qrBig"></div>
+      <div>
+        <h1>把手机连到同一个 Wi-Fi</h1>
+        <p>用手机相机扫下面这个码，或者在手机浏览器里直接打开这个地址。之后在手机上选文件，这里就会实时出现。</p>
+        <code>http://${INFO.ip}:${INFO.port}/m</code>
+        <div class="hint">保存到电脑会写入 ${INFO.saveDir||'~/Downloads/AirDropWeb'}</div>
+      </div></div>`
+    drawQR($('#qrBig'))
+    return
+  }
+  const groups = new Map()
+  for(const x of incoming.values()){
+    if(!groups.has('今天')) groups.set('今天', {inc:[],files:[]})
+    groups.get('今天').inc.push(x)
+  }
+  for(const f of files){
+    const k = dayBucket(f.at)
+    if(!groups.has(k)) groups.set(k, {inc:[],files:[]})
+    groups.get(k).files.push(f)
+  }
+  main.innerHTML = [...groups].map(([k,g]) => `<section class="group">
+      <h2>${k} <i>${g.files.length + g.inc.length} 项</i></h2>
+      <div class="grid" role="listbox" aria-multiselectable="true">
+        ${g.inc.map(incomingHTML).join('')}${g.files.map(cardHTML).join('')}
+      </div></section>`).join('')
+  if(newIds) for(const id of newIds){
+    const el = main.querySelector(`[data-id="${id}"]`); if(el) el.classList.add('new')
+  }
+  document.body.classList.toggle('selecting', selected.size>0)
+  $('#selN').textContent = selected.size
+}
+
+// qrcodejs 的 svgDrawer 输出 viewBox + width/height=100%，并且自己会先清空容器，
+// 所以这里不传像素尺寸 —— 多大由容器的 CSS 说（.qr-mini / .qr-big / #qrZoom 各自定）。
+// 上一版是按格子边长传死数字，等于把尺寸知识拆到三个调用点上。
+function drawQR(el){
+  if(!el) return
+  try{
+    new QRCode(el, {
+      text: `http://${INFO.ip}:${INFO.port}/m`,
+      useSVG: true,
+      colorDark: '#000000',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M,
+    })
+  }catch(e){ el.textContent = '二维码生成失败' }
+}
+
+/* ── 交互 ─────────────────────────────── */
+$('#main').addEventListener('click', e => {
+  const chk = e.target.closest('[data-check]')
+  const card = e.target.closest('.card[data-id]')
+  if(!card) return
+  const id = card.dataset.id
+  if(chk || selected.size>0){ toggle(id) } else { openLB(files.findIndex(f=>f.id===id)) }
+})
+$('#main').addEventListener('keydown', e => {
+  const card = e.target.closest('.card[data-id]'); if(!card) return
+  if(e.key===' '){ e.preventDefault(); toggle(card.dataset.id) }
+  if(e.key==='Enter'){ e.preventDefault(); openLB(files.findIndex(f=>f.id===card.dataset.id)) }
+})
+function toggle(id){
+  selected.has(id) ? selected.delete(id) : selected.add(id)
+  const el = document.querySelector(`.card[data-id="${id}"]`)
+  if(el) el.setAttribute('aria-selected', selected.has(id))
+  document.body.classList.toggle('selecting', selected.size>0)
+  $('#selN').textContent = selected.size
+}
+document.addEventListener('keydown', e => {
+  if(e.key==='Escape'){
+    if($('#lb').hasAttribute('open')) closeLB()
+    else if(selected.size){ selected.clear(); render() }
+  }
+  if((e.metaKey||e.ctrlKey) && e.key==='a' && !$('#lb').hasAttribute('open')){
+    e.preventDefault(); files.forEach(f=>selected.add(f.id)); render()
+  }
+  if($('#lb').hasAttribute('open')){
+    if(e.key==='ArrowRight') openLB(Math.min(lbIndex+1, files.length-1))
+    if(e.key==='ArrowLeft') openLB(Math.max(lbIndex-1, 0))
+  }
+})
+
+// 密度记在本机：这是"我这台电脑上顺手"的偏好，不是服务端状态
+const DENSITY_KEY = 'airdrop.density'
+function applyDensity(d){
+  if(!['roomy','normal','tight'].includes(d)) return
+  document.body.dataset.density = d
+  document.querySelectorAll('.density button').forEach(x =>
+    x.dataset.d===d ? x.setAttribute('aria-pressed','true') : x.removeAttribute('aria-pressed'))
+}
+try{ applyDensity(localStorage.getItem(DENSITY_KEY)) }catch{}
+document.querySelectorAll('.density button').forEach(b => b.addEventListener('click', () => {
+  applyDensity(b.dataset.d)
+  try{ localStorage.setItem(DENSITY_KEY, b.dataset.d) }catch{}
+}))
+$('#copy').addEventListener('click', async () => {
+  try{ await navigator.clipboard.writeText(`http://${INFO.ip}:${INFO.port}/m`)
+    $('#copy').textContent='已复制'; setTimeout(()=>$('#copy').textContent='复制地址',1400) }catch{}
+})
+$('#qrMini').addEventListener('click', () => { selected.clear(); showQRDialog() })
+function showQRDialog(){
+  const lb=$('#lb'); lbIndex=-1
+  $('#lbName').textContent='用手机扫码打开'
+  $('#lbMeta').textContent=`http://${INFO.ip}:${INFO.port}/m`
+  $('#lb .acts').style.visibility='hidden'
+  $('#lbStage').innerHTML='<div class="qr-big" style="width:320px;height:320px;background:#fff;border-radius:14px;padding:28px" id="qrZoom"></div>'
+  drawQR($('#qrZoom'))
+  lb.setAttribute('open','')
+  $('#lbClose').style.visibility='visible'
+}
+
+/* ── 预览 ─────────────────────────────── */
+async function openLB(i){
+  if(i<0||i>=files.length) return
+  lbIndex=i; const f=files[i]
+  $('#lb .acts').style.visibility='visible'
+  $('#lbName').textContent=f.name
+  $('#lbMeta').textContent=`${fmtSize(f.size)} · ${fmtTime(f.at)} · ${f.mime.split(';')[0]}`
+  const stage=$('#lbStage')
+  let inner
+  if(f.kind==='image') inner=`<img src="/file/${f.id}" alt="${escapeHTML(f.name)}">`
+  else if(f.kind==='video') inner=`<video src="/file/${f.id}" controls autoplay playsinline></video>`
+  else if(f.kind==='audio') inner=`<audio src="/file/${f.id}" controls autoplay style="width:min(520px,90%)"></audio>`
+  else if(f.kind==='pdf') inner=`<iframe src="/file/${f.id}" title="${escapeHTML(f.name)}"></iframe>`
+  else if(f.kind==='text') inner=`<pre id="txt">读取中…</pre>`
+  else inner=`<div class="none"><em>${ext(f.name)}</em>这个类型没法在浏览器里预览<br>可以直接保存到电脑再打开</div>`
+  stage.innerHTML = inner +
+    (files.length>1 ? `<button class="nav prev" id="navPrev" aria-label="上一个">‹</button>
+                       <button class="nav next" id="navNext" aria-label="下一个">›</button>` : '')
+  if(f.kind==='text'){
+    try{ $('#txt').textContent = await (await fetch('/file/'+f.id)).text() }
+    catch{ $('#txt').textContent='读取失败' }
+  }
+  const p=$('#navPrev'), n=$('#navNext')
+  if(p) p.onclick=()=>openLB(Math.max(0,i-1))
+  if(n) n.onclick=()=>openLB(Math.min(files.length-1,i+1))
+  $('#lb').setAttribute('open','')
+}
+function closeLB(){ $('#lb').removeAttribute('open'); $('#lbStage').innerHTML='' }
+$('#lbClose').onclick = closeLB
+$('#lb').addEventListener('click', e => { if(e.target===$('#lb')) closeLB() })
+
+/* ── 动作 ─────────────────────────────── */
+async function saveToComputer(ids){
+  if(!ids.length) return
+  const r = await (await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ids})})).json()
+  ids.forEach(id=>{ const f=files.find(x=>x.id===id); if(f) f.saved=true })
+  showToast(`已保存 ${r.files.length} 个文件到电脑`, r.dir)
+  selected.clear(); render()
+}
+function downloadIn(ids){
+  ids.forEach((id,k)=>setTimeout(()=>{
+    const a=document.createElement('a'); a.href='/file/'+id+'?dl=1'; a.download=''
+    document.body.appendChild(a); a.click(); a.remove()
+  }, k*250))
+}
+async function removeIds(ids){
+  await fetch('/api/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})})
+  files=files.filter(f=>!ids.includes(f.id)); ids.forEach(i=>selected.delete(i)); render()
+}
+$('#aSave').onclick = ()=>saveToComputer([...selected])
+$('#aDownload').onclick = ()=>{ downloadIn([...selected]); selected.clear(); render() }
+$('#aDelete').onclick = ()=>removeIds([...selected])
+$('#aCancel').onclick = ()=>{ selected.clear(); render() }
+$('#lbSave').onclick = ()=>{ const f=files[lbIndex]; if(f) saveToComputer([f.id]) }
+$('#lbDownload').onclick = ()=>{ const f=files[lbIndex]; if(f) downloadIn([f.id]) }
+$('#lbDelete').onclick = async ()=>{ const f=files[lbIndex]; if(!f) return; await removeIds([f.id]); closeLB() }
+
+let toastTimer
+function showToast(msg, path){
+  $('#toastMsg').textContent=msg; $('#toastPath').textContent=path||''
+  $('#toast').setAttribute('open','')
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>$('#toast').removeAttribute('open'), 6000)
+}
+$('#toastAction').onclick = ()=>fetch('/api/reveal',{method:'POST'})
+
+/* ── 数据 ─────────────────────────────── */
+async function boot(){
+  INFO = await (await fetch('/api/info')).json()
+  $('#hostname').textContent = INFO.host
+  $('#addr').textContent = `${INFO.ip}:${INFO.port}`
+  drawQR($('#qrMini'))
+  files = await (await fetch('/api/files')).json()
+  for(const x of await (await fetch('/api/incoming')).json()) incoming.set(x.id, x)
+  render()
+
+  const es = new EventSource('/api/events')
+  es.addEventListener('incoming', e => { const x=JSON.parse(e.data); x.received=0; incoming.set(x.id,x); render() })
+  es.addEventListener('progress', e => {
+    const x=JSON.parse(e.data)
+    let rec=incoming.get(x.id)
+    if(!rec){ rec={...x}; incoming.set(x.id, rec); render() }   // 中途打开页面时补齐
+    rec.received=x.received; rec.size=x.size||rec.size
+    const el=document.querySelector(`[data-inc="${x.id}"]`)
+    if(el){ const pct=rec.size?Math.round(rec.received/rec.size*100):0
+      el.querySelector('.bar i').style.width=pct+'%'
+      el.querySelector('.glyph small').textContent='正在接收 '+pct+'%'
+      el.querySelector('.cap span').textContent=fmtSize(rec.received)+' / '+fmtSize(rec.size)
+    } else render()
+  })
+  es.addEventListener('added', e => { const f=JSON.parse(e.data); incoming.delete(f.id)
+    if(!files.some(x=>x.id===f.id)) files.unshift(f); render([f.id]) })
+  es.addEventListener('failed', e => { incoming.delete(JSON.parse(e.data).id); render() })
+  es.addEventListener('update', e => { const f=JSON.parse(e.data)
+    const i=files.findIndex(x=>x.id===f.id); if(i>=0){ files[i]=f; render() } })
+  es.addEventListener('removed', e => { const {ids}=JSON.parse(e.data)
+    files=files.filter(f=>!ids.includes(f.id)); render() })
+  es.addEventListener('saved', e => { const {ids}=JSON.parse(e.data)
+    ids.forEach(id=>{const f=files.find(x=>x.id===id); if(f) f.saved=true}); render() })
+}
+boot()
+</script>
+</body>
+</html>

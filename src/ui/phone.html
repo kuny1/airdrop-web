@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="theme-color" content="#12141a">
+<title>传到电脑</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2312141a'/%3E%3Cg fill='none' stroke='%23ffb84d' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 22V9m0 0-5 5m5-5 5 5'/%3E%3Cpath d='M9 21v2.5A1.5 1.5 0 0 0 10.5 25h11a1.5 1.5 0 0 0 1.5-1.5V21'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+:root{
+  --ink:#12141a; --surface:#1a1d26; --surface-2:#222633; --surface-3:#2b3040;
+  --line:#2b3040; --line-soft:#232733;
+  --text:#e8eaf0; --dim:#9aa0b4; --faint:#6b7284;
+  --accent:#ffb84d; --accent-ink:#1c1400; --accent-soft:#3a2c10;
+  --ok:#5fd39a; --danger:#ff7a6b;
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overscroll-behavior:none;overflow-x:hidden}
+body{
+  margin:0;background:var(--ink);color:var(--text);
+  font:400 15px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  display:flex;flex-direction:column;
+}
+button{font:inherit;color:inherit;background:none;border:none;padding:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+
+header{
+  padding:calc(env(safe-area-inset-top) + var(--s4)) var(--s4) var(--s3);
+  border-bottom:1px solid var(--line-soft);
+}
+.conn{display:flex;align-items:center;gap:var(--s2)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none;
+  box-shadow:0 0 0 0 rgba(95,211,154,.5);animation:pulse 2.6s ease-out infinite}
+.dot.bad{background:var(--danger);animation:none}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(95,211,154,.45)}70%,100%{box-shadow:0 0 0 7px rgba(95,211,154,0)}}
+.conn b{font-size:16px;font-weight:600}
+.conn span{color:var(--dim);font-size:13.5px}
+.tally{margin-top:var(--s1);font-size:13px;color:var(--faint)}
+.tally b{color:var(--accent);font-weight:600}
+
+main{flex:1;overflow-y:auto;padding:var(--s4) var(--s4) var(--s5);-webkit-overflow-scrolling:touch}
+
+.blank{text-align:center;padding:14vh var(--s3) 0;color:var(--dim)}
+.blank .mark{
+  width:64px;height:64px;margin:0 auto var(--s4);border-radius:20px;
+  background:var(--accent-soft);display:grid;place-content:center;
+}
+.blank .mark svg{width:30px;height:30px;stroke:var(--accent)}
+.blank h1{margin:0 0 var(--s2);font-size:19px;font-weight:600;color:var(--text)}
+.blank p{margin:0 auto;font-size:14px;max-width:min(26em,100%);line-height:1.6}
+
+.q{display:flex;flex-direction:column;gap:var(--s2)}
+.item{
+  display:flex;align-items:center;gap:var(--s3);
+  background:var(--surface);border:1px solid var(--line-soft);
+  border-radius:12px;padding:var(--s3);position:relative;overflow:hidden;
+}
+.item.done{border-color:#26402f}
+.item.err{border-color:#4a2724}
+.thumb{width:44px;height:44px;border-radius:9px;flex:none;overflow:hidden;
+  background:var(--surface-2);display:grid;place-content:center}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.thumb em{font:700 12px/1 ui-monospace,Menlo,monospace;font-style:normal;color:var(--dim)}
+.body{flex:1;min-width:0}
+.body b{display:block;font-size:14px;font-weight:500;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.body .sub{font-size:12.5px;color:var(--dim);margin-top:2px;
+  display:flex;align-items:center;gap:6px}
+.item.done .sub{color:var(--ok)}
+.item.err .sub{color:var(--danger)}
+.track{margin-top:7px;height:3px;border-radius:2px;background:var(--surface-3);overflow:hidden}
+.track i{display:block;height:100%;background:var(--accent);width:0;transition:width .15s linear}
+.item.done .track,.item.queued .track{display:none}
+.retry{flex:none;padding:7px 12px;border-radius:8px;background:var(--surface-3);
+  font-size:13px;font-weight:500}
+.tick{flex:none;width:22px;height:22px;border-radius:50%;background:var(--ok);
+  display:grid;place-content:center}
+.tick svg{width:12px;height:12px;stroke:#0d2018;stroke-width:2.4;fill:none;
+  stroke-linecap:round;stroke-linejoin:round}
+
+footer{
+  border-top:1px solid var(--line-soft);background:var(--surface);
+  padding:var(--s3) var(--s4) calc(env(safe-area-inset-bottom) + var(--s3));
+}
+.picks{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2)}
+.pick{
+  display:flex;align-items:center;justify-content:center;gap:var(--s2);
+  padding:15px var(--s3);border-radius:12px;background:var(--surface-2);
+  font-size:15px;font-weight:500;
+}
+.pick:active{background:var(--surface-3)}
+.pick svg{width:19px;height:19px;stroke:var(--accent);fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.pick.wide{grid-column:1/-1;background:var(--accent);color:var(--accent-ink);font-weight:600}
+.pick.wide svg{stroke:var(--accent-ink)}
+.pick.wide:active{background:#e8a63f}
+.textrow{display:flex;gap:var(--s2);margin-top:var(--s2)}
+.textrow input{
+  flex:1;min-width:0;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:11px;padding:13px var(--s3);color:var(--text);font:inherit;font-size:15px;
+}
+.textrow input::placeholder{color:var(--faint)}
+.textrow input:focus{outline:2px solid var(--accent);outline-offset:0;border-color:transparent}
+.textrow button{padding:0 18px;border-radius:11px;background:var(--surface-3);font-weight:500}
+.textrow button[disabled]{opacity:.4}
+input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="conn"><span class="dot" id="dot"></span>
+    <b id="host">…</b><span id="connText">已连接</span></div>
+  <div class="tally" id="tally">还没有发送任何东西</div>
+</header>
+
+<main id="main">
+  <div class="blank" id="blank">
+    <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17V3m0 0L7 8m5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></div>
+    <h1>选点东西发过去</h1>
+    <p>下面挑照片、文件，或者直接拍一张。传输过程中电脑那边会实时看到进度。</p>
+  </div>
+  <div class="q" id="queue"></div>
+</main>
+
+<footer>
+  <div class="picks">
+    <button class="pick wide" id="pMedia">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="M3 16.5 8.5 12l4 3.5L16 12l5 4.5"/></svg>
+      照片 / 视频
+    </button>
+    <button class="pick" id="pFile">
+      <svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+      任意文件
+    </button>
+    <button class="pick" id="pCam">
+      <svg viewBox="0 0 24 24"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.2l1-2h6.6l1 2h1.2A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3.4"/></svg>
+      拍照直传
+    </button>
+  </div>
+  <div class="textrow">
+    <input id="text" type="text" placeholder="或者粘一段文字 / 链接" autocomplete="off" enterkeyhint="send">
+    <button id="send" disabled>发送</button>
+  </div>
+</footer>
+
+<input type="file" id="fMedia" accept="image/*,video/*" multiple>
+<input type="file" id="fFile" multiple>
+<input type="file" id="fCam" accept="image/*" capture="environment">
+
+<script>
+const $ = s => document.querySelector(s)
+const queue = []   // {uid,file,state:'queued'|'up'|'done'|'err',sent,total,thumbURL}
+let busy = false, sentCount = 0
+
+const fmtSize = b => b < 1024 ? b+' B'
+  : b < 1048576 ? (b/1024).toFixed(0)+' KB'
+  : b < 1073741824 ? (b/1048576).toFixed(1)+' MB' : (b/1073741824).toFixed(2)+' GB'
+const ext = n => (n.split('.').pop()||'?').toUpperCase().slice(0,4)
+const escapeHTML = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))
+
+fetch('/api/info').then(r=>r.json()).then(i=>{
+  $('#host').textContent = i.host
+  $('#connText').textContent = '· 已连接'
+}).catch(()=>{
+  $('#dot').classList.add('bad'); $('#host').textContent='连不上电脑'
+  $('#connText').textContent='· 检查是否同一个 Wi-Fi'
+})
+
+function stateText(it){
+  if(it.state==='queued') return '排队中'
+  if(it.state==='up') return `正在传 ${it.total?Math.round(it.sent/it.total*100):0}%  ·  ${fmtSize(it.sent)} / ${fmtSize(it.total)}`
+  if(it.state==='done') return '已到达电脑'
+  return '传输失败'
+}
+function itemHTML(it){
+  const f = it.file
+  const thumb = it.thumbURL
+    ? `<img src="${it.thumbURL}" alt="">`
+    : `<em>${ext(f.name)}</em>`
+  return `<div class="item ${it.state==='done'?'done':it.state==='err'?'err':it.state}" data-uid="${it.uid}">
+    <div class="thumb">${thumb}</div>
+    <div class="body">
+      <b>${escapeHTML(f.name)}</b>
+      <div class="sub">${stateText(it)}</div>
+      <div class="track"><i style="width:${it.total?it.sent/it.total*100:0}%"></i></div>
+    </div>
+    ${it.state==='done'?`<span class="tick"><svg viewBox="0 0 12 12"><path d="M2 6.3 4.6 9 10 3.2"/></svg></span>`:''}
+    ${it.state==='err'?`<button class="retry" data-retry="${it.uid}">重试</button>`:''}
+  </div>`
+}
+function render(){
+  $('#blank').style.display = queue.length ? 'none' : ''
+  $('#queue').innerHTML = queue.map(itemHTML).join('')
+  $('#tally').innerHTML = sentCount
+    ? `已发送 <b>${sentCount}</b> 项${queue.some(i=>i.state==='queued'||i.state==='up')?` · 还有 ${queue.filter(i=>i.state==='queued'||i.state==='up').length} 项在传`:''}`
+    : '还没有发送任何东西'
+}
+function patch(it){
+  const el = document.querySelector(`[data-uid="${it.uid}"]`)
+  if(!el) return render()
+  el.querySelector('.sub').textContent = stateText(it)
+  const bar = el.querySelector('.track i')
+  if(bar) bar.style.width = (it.total?it.sent/it.total*100:0)+'%'
+}
+
+function enqueue(fileList){
+  for(const f of fileList){
+    const it = { uid: Math.random().toString(36).slice(2), file:f, state:'queued', sent:0, total:f.size, thumbURL:null }
+    if(f.type.startsWith('image/')) it.thumbURL = URL.createObjectURL(f)
+    queue.unshift(it)
+  }
+  render(); pump()
+}
+function pump(){
+  if(busy) return
+  const it = queue.find(i=>i.state==='queued')   // 正在传的那个始终在最上面
+  if(!it) return
+  busy = true; it.state='up'; render()
+  const xhr = new XMLHttpRequest()
+  xhr.open('POST','/api/upload')
+  xhr.setRequestHeader('X-Filename', encodeURIComponent(it.file.name))
+  xhr.setRequestHeader('X-Mime', it.file.type || 'application/octet-stream')
+  xhr.upload.onprogress = e => { it.sent = e.loaded; it.total = e.total; patch(it) }
+  xhr.onload = () => {
+    busy=false
+    if(xhr.status===200){ it.state='done'; it.sent=it.total; sentCount++ }
+    else it.state='err'
+    render(); pump()
+  }
+  xhr.onerror = xhr.onabort = () => { busy=false; it.state='err'; render(); pump() }
+  xhr.send(it.file)
+}
+
+const wire = (btn, input) => {
+  $(btn).addEventListener('click', ()=>$(input).click())
+  $(input).addEventListener('change', e => { if(e.target.files.length) enqueue(e.target.files); e.target.value='' })
+}
+wire('#pMedia','#fMedia'); wire('#pFile','#fFile'); wire('#pCam','#fCam')
+
+$('#queue').addEventListener('click', e => {
+  const b = e.target.closest('[data-retry]'); if(!b) return
+  const it = queue.find(i=>i.uid===b.dataset.retry); if(!it) return
+  it.state='queued'; it.sent=0; render(); pump()
+})
+
+const text = $('#text'), send = $('#send')
+text.addEventListener('input', ()=>{ send.disabled = !text.value.trim() })
+text.addEventListener('keydown', e => { if(e.key==='Enter' && text.value.trim()) sendText() })
+send.addEventListener('click', sendText)
+async function sendText(){
+  const v = text.value.trim(); if(!v) return
+  text.value=''; send.disabled=true
+  const uid = Math.random().toString(36).slice(2)
+  const fake = { name: (v.slice(0,20).replace(/\s+/g,' ')||'文本')+'.txt', size: new Blob([v]).size, type:'text/plain' }
+  const it = { uid, file:fake, state:'up', sent:0, total:fake.size, thumbURL:null }
+  queue.unshift(it); render()
+  try{
+    const r = await fetch('/api/text',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:v})})
+    it.state = r.ok ? 'done' : 'err'; if(r.ok){ it.sent=it.total; sentCount++ }
+  }catch{ it.state='err' }
+  render()
+}
+</script>
+</body>
+</html>
